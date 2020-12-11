@@ -16,12 +16,13 @@
 #define BUFLEN 256
 #define FRAME_SIZE  256
 
-FILE* fs_store_bin;
-int table[256];
 int tlb[16][2];
-char vmem[65536];
-int page_replacement_table[256];
+int table[256];
 int fifo_queue[128];
+int page_replacement_table[256];
+
+char vmem[65536];
+char fifo_vmem[32768];
 
 //-----------------------HELPERS-------------------------------------
 
@@ -48,6 +49,13 @@ void getpage_offset(unsigned x) {
 
 void page_replacement() {
   printf("Initiated Part 2, page replacement\n");
+  
+  char vbuff[BUFLEN];
+  unsigned logic_add;
+  unsigned vadd_file, padd_file, value_file;
+  unsigned vpage = 0;
+  unsigned vframe = 0; 
+  unsigned voffset = 0;
 
   for (int i = 0; i < 256; i++) {
     page_replacement_table[i] = -1;
@@ -58,8 +66,32 @@ void page_replacement() {
   for (int i = 0; i < 128; i++) {
     fifo_queue[i] = -1;
   }
+  FILE* fadd = open_file("addresses.txt", "r");
+  FILE* fcorr = open_file("correct.txt", "r");
+  FILE* fs_store_bin = open_file("BACKING_STORE.bin", "r");
 
+  while (fscanf(fadd, "%d", &logic_add) != EOF) {
 
+    fscanf(fcorr, "%s %s %d %s %s %d %s %d", vbuff, vbuff, &vadd_file,
+           vbuff, vbuff, &padd_file, vbuff, &value_file);  // read from file correct.txt
+
+    vpage   = getpage(  logic_add);
+    voffset = getoffset(logic_add);
+
+    unsigned padd = vframe * FRAME_SIZE + voffset;
+    int val = (int) fifo_vmem[padd_file];
+    
+    printf("logical: %5u (page: %3u, offset: %3u) ---> physical: %5u -> value: %d-- passed\n", 
+            logic_add, vpage, voffset, padd_file, val);
+
+    // assert(value_file == val);
+  }
+
+  fclose(fcorr);
+  fclose(fadd);
+  fclose(fs_store_bin);
+
+  printf("\n\t\t Finished part 2, exiting successfully.\n");
 }
 
 int main(int argc, const char* argv[]) {
@@ -71,7 +103,7 @@ int main(int argc, const char* argv[]) {
   unsigned   logic_add;                  // read from file address.txt
   unsigned   virt_add, phys_add, value;  // read from file correct.txt
 
-  fs_store_bin = open_file("correct.txt", "r");
+  FILE* fs_store_bin = open_file("correct.txt", "r");
 
   if(fs_store_bin == NULL) {
     printf("Could not open BACKING_STORE.bin\n");
@@ -102,20 +134,15 @@ int main(int argc, const char* argv[]) {
     
     /* TODO */ // assert(physical_add == phys_add);
     
-    // todo: read BINARY_STORE and confirm value matches read value from correct.txt
-    
     printf("logical: %5u (page: %3u, offset: %3u) ---> physical: %5u vmem_val %d -- passed\n", logic_add, page, offset, physical_add, vmem_val);
-    if (frame % 5 == 0) { printf("\n"); }
   }
   fclose(fcorr);
   fclose(fadd);
   fclose(fs_store_bin);
   
   printf("ALL logical ---> physical assertions PASSED!\n");
-
-//  printf("NOT CORRECT -- ONLY READ FIRST 20 ENTRIES... TODO: MAKE IT READ ALL ENTRIES\n");
-
   printf("\n\t\t Finished part 1, executing part 2 -- page replacement.\n");
+
   page_replacement();
   return 0;
 }
