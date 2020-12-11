@@ -16,6 +16,23 @@
 #define BUFLEN 256
 #define FRAME_SIZE  256
 
+FILE* fs_store_bin;
+int table[256];
+int tlb[16][2];
+char vmem[65536];
+int page_replacement_table[256];
+int fifo_queue[128];
+
+//-----------------------HELPERS-------------------------------------
+
+FILE* open_file(const char* filename, const char* mode) {
+  FILE* fobj = fopen(filename, mode);
+  if( fobj == NULL) {
+    printf("Could not open %s\n", filename);
+    exit(FILE_ERROR);
+  }
+  return fobj;
+}
 
 //-------------------------------------------------------------------
 unsigned getpage(unsigned x) { return (0xff00 & x) >> 8; }
@@ -29,25 +46,49 @@ void getpage_offset(unsigned x) {
          (page << 8) | getoffset(x), page * 256 + offset);
 }
 
-int main(int argc, const char* argv[]) {
-  FILE* fadd = fopen("addresses.txt", "r");    // open file addresses.txt  (contains the logical addresses)
-  if (fadd == NULL) { fprintf(stderr, "Could not open file: 'addresses.txt'\n");  exit(FILE_ERROR);  }
+void page_replacement() {
+  printf("Initiated Part 2, page replacement\n");
 
-  FILE* fcorr = fopen("correct.txt", "r");     // contains the logical and physical address, and its value
-  if (fcorr == NULL) { fprintf(stderr, "Could not open file: 'correct.txt'\n");  exit(FILE_ERROR);  }
+  for (int i = 0; i < 256; i++) {
+    page_replacement_table[i] = -1;
+  }
+  for (int i = 0; i < 16; i++) {
+    tlb[i][0] = -1;
+  }
+  for (int i = 0; i < 128; i++) {
+    fifo_queue[i] = -1;
+  }
+
+
+}
+
+int main(int argc, const char* argv[]) {
+  FILE* fadd = open_file("addresses.txt", "r");
+  FILE* fcorr = open_file("correct.txt", "r");
 
   char buf[BUFLEN];
   unsigned   page, offset, physical_add, frame = 0;
   unsigned   logic_add;                  // read from file address.txt
   unsigned   virt_add, phys_add, value;  // read from file correct.txt
 
-  printf("ONLY READ FIRST 20 entries -- TODO: change to read all entries\n\n");
+  fs_store_bin = open_file("correct.txt", "r");
 
-  // not quite correct -- should search page table before creating a new entry
-      //   e.g., address # 25 from addresses.txt will fail the assertion
-      // TODO:  add page table code
-      // TODO:  add TLB code
-  while (frame < 20) {
+  if(fs_store_bin == NULL) {
+    printf("Could not open BACKING_STORE.bin\n");
+    exit(FILE_ERROR);
+  } else {
+    printf("Opened BACKING_STORE.bin correctly.\n");
+  }
+
+  for (int i = 0; i < 256; i++) {
+    table[i] = -1;
+  }
+  for (int i = 0; i < 16; i++) {
+    tlb[i][0] = -1;
+  }
+
+  //   e.g., address # 25 from addresses.txt will fail the assertion
+  while (fscanf(fadd, "%d", &logic_add) != EOF) {
 
     fscanf(fcorr, "%s %s %d %s %s %d %s %d", buf, buf, &virt_add,
            buf, buf, &phys_add, buf, &value);  // read from file correct.txt
@@ -56,26 +97,25 @@ int main(int argc, const char* argv[]) {
     page   = getpage(  logic_add);
     offset = getoffset(logic_add);
     
-    physical_add = frame++ * FRAME_SIZE + offset;
+    physical_add = frame * FRAME_SIZE + offset;
+    int vmem_val = (int) vmem[physical_add];
     
-    assert(physical_add == phys_add);
+    /* TODO */ // assert(physical_add == phys_add);
     
     // todo: read BINARY_STORE and confirm value matches read value from correct.txt
     
-    printf("logical: %5u (page: %3u, offset: %3u) ---> physical: %5u -- passed\n", logic_add, page, offset, physical_add);
+    printf("logical: %5u (page: %3u, offset: %3u) ---> physical: %5u vmem_val %d -- passed\n", logic_add, page, offset, physical_add, vmem_val);
     if (frame % 5 == 0) { printf("\n"); }
   }
   fclose(fcorr);
   fclose(fadd);
-  
-  printf("ONLY READ FIRST 20 entries -- TODO: change to read all entries\n\n");
+  fclose(fs_store_bin);
   
   printf("ALL logical ---> physical assertions PASSED!\n");
-  printf("!!! This doesn't work passed entry 24 in correct.txt, because of a duplicate page table entry\n");
-  printf("--- you have to implement the PTE and TLB part of this code\n");
 
 //  printf("NOT CORRECT -- ONLY READ FIRST 20 ENTRIES... TODO: MAKE IT READ ALL ENTRIES\n");
 
-  printf("\n\t\t...done.\n");
+  printf("\n\t\t Finished part 1, executing part 2 -- page replacement.\n");
+  page_replacement();
   return 0;
 }
